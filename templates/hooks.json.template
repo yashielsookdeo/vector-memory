@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "__SESSION_REINDEX_PATH__",
+        "timeout": 60000
+      }
+    ]
+  }
+}

@@ -24,7 +24,10 @@ Give Claude Code a long-term memory. It searches your codebase by meaning (not j
 
 - **`qdrant-find`** — semantic search across your entire codebase. Ask "where is authentication handled?" and get exact file + line references.
 - **`qdrant-store`** — save decisions, bug fixes, and insights. Retrieved in future sessions automatically.
-- **`vector-memory` skill** — teaches Claude when to search and what to store. Auto-starts Qdrant on session start.
+- **`vector-memory` skill** — teaches Claude when to search and what to store.
+- **Smart chunking** — splits code at function/class boundaries instead of arbitrary line counts.
+- **Incremental indexing** — only re-embeds files that changed (git diff for repos, mtime for non-git dirs).
+- **Session hooks** — auto-starts Qdrant and reindexes on every session start.
 
 ---
 
@@ -55,8 +58,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 VECTOR_MEMORY_WORKSPACE=/path/to/your/project python3 index_codebase.py
 
-# 4. Restart Claude Code and activate
-# Run in Claude Code: /vector-memory
+# 4. Restart Claude Code and run: /vector-memory
 ```
 
 ---
@@ -83,6 +85,101 @@ Just ask naturally — Claude searches automatically:
 Use qdrant-find to search for "database connection pooling"
 Use qdrant-store to remember that X is handled in Y
 ```
+
+---
+
+## Always-On Mode (recommended)
+
+Instead of running `/vector-memory` each session, add instructions to your project's `CLAUDE.md`:
+
+```markdown
+## Vector Memory (Qdrant)
+
+This workspace uses Qdrant vector search (`my-project` collection) for codebase knowledge.
+
+### Search Before Answering
+Before answering any question about the codebase, use `qdrant-find` first.
+After getting results, use the Read tool on the returned file paths.
+
+### Store After Solving
+After fixing a bug, making a decision, or discovering how something works, use `qdrant-store`:
+[DATE] <summary> | Root cause: ... | Fix: ... | Key files: ...
+```
+
+This makes vector memory active every session without manual invocation.
+
+---
+
+## Automatic Session Hooks (recommended)
+
+Auto-start Qdrant and reindex changed files on every session:
+
+```bash
+# 1. Copy and configure the reindex script
+cp templates/session-reindex.sh.template /path/to/your/project/scripts/session-reindex.sh
+# Edit the VECTOR_MEMORY_WORKSPACE and VECTOR_MEMORY_SCRIPTS paths
+chmod +x /path/to/your/project/scripts/session-reindex.sh
+
+# 2. Set up the hook
+mkdir -p /path/to/your/project/.claude
+cp templates/hooks.json.template /path/to/your/project/.claude/hooks.json
+# Edit the command path to point to your session-reindex.sh
+```
+
+Now every Claude Code session automatically ensures Qdrant is running and your index is fresh.
+
+---
+
+## Indexing Modes
+
+### Full index (default)
+Embeds all indexable files:
+```bash
+VECTOR_MEMORY_WORKSPACE=/path/to/project python3 index_codebase.py
+```
+
+### Incremental index
+Only re-embeds files that changed since last run:
+```bash
+VECTOR_MEMORY_WORKSPACE=/path/to/project python3 index_codebase.py --incremental
+```
+
+Uses hybrid change detection:
+- **Git repos** — `git diff` against stored commit hash
+- **Non-git directories** — file modification time comparison
+- **Mixed workspaces** — auto-detects which directories are git repos
+
+### Clean rebuild
+Drops the collection and rebuilds from scratch:
+```bash
+VECTOR_MEMORY_WORKSPACE=/path/to/project python3 index_codebase.py --clean
+```
+
+### Dry run
+Count files without indexing:
+```bash
+VECTOR_MEMORY_WORKSPACE=/path/to/project python3 index_codebase.py --dry-run
+```
+
+---
+
+## Smart Chunking
+
+The indexer splits code at natural boundaries instead of fixed line counts:
+
+| Language | Boundary patterns |
+|----------|------------------|
+| Kotlin/Java | `fun`, `class`, `object`, `interface`, `@Composable` |
+| TypeScript/JS | `export`, `function`, `class`, `interface`, arrow functions |
+| Python | `def`, `class`, `async def` |
+| Go | `func`, `type` |
+| Rust | `fn`, `struct`, `enum`, `impl`, `trait` |
+| Ruby | `def`, `class`, `module` |
+| XML | Opening tags |
+| YAML | `---`, top-level keys |
+| Markdown | Headings |
+
+Chunks target 40-80 lines, splitting at the nearest boundary. Tiny trailing fragments (< 10 lines) are merged with the previous chunk.
 
 ---
 
@@ -121,22 +218,6 @@ VECTOR_MEMORY_WORKSPACE=/path/to/project python3 index_codebase.py
 ```
 
 **6. Restart Claude Code**
-
----
-
-## Re-indexing
-
-Run after significant code changes:
-
-```bash
-cd scripts && source .venv/bin/activate
-
-# Incremental (fast, safe to run anytime)
-VECTOR_MEMORY_WORKSPACE=/path/to/project python3 index_codebase.py
-
-# Full rebuild (after large refactors)
-VECTOR_MEMORY_WORKSPACE=/path/to/project python3 index_codebase.py --clean
-```
 
 ---
 

@@ -73,6 +73,17 @@ mkdir -p "${SKILL_DIR}"
 cp "${REPO_DIR}/skill/SKILL.md" "${SKILL_DIR}/SKILL.md"
 ok "Skill installed at ${SKILL_DIR}/SKILL.md"
 
+# ── Step 5: Set up Python venv for indexer ───────────────────────────────────
+info "Setting up indexer dependencies..."
+if [ ! -d "${REPO_DIR}/scripts/.venv" ]; then
+  python3 -m venv "${REPO_DIR}/scripts/.venv"
+  source "${REPO_DIR}/scripts/.venv/bin/activate"
+  pip install -q -r "${REPO_DIR}/scripts/requirements.txt"
+  ok "Indexer dependencies installed"
+else
+  ok "Indexer venv already exists"
+fi
+
 # ── Done ─────────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${GREEN}Setup complete!${NC} Next steps:"
@@ -82,10 +93,18 @@ echo "     cp ${REPO_DIR}/templates/.mcp.json.template /path/to/your/project/.mc
 echo "     Edit .mcp.json and set COLLECTION_NAME to your project name"
 echo ""
 echo "  2. Index your codebase:"
-echo "     cd ${REPO_DIR}/scripts"
-echo "     python3 -m venv .venv && source .venv/bin/activate"
-echo "     pip install -r requirements.txt"
+echo "     cd ${REPO_DIR}/scripts && source .venv/bin/activate"
 echo "     VECTOR_MEMORY_WORKSPACE=/path/to/your/project python3 index_codebase.py"
 echo ""
-echo "  3. Restart Claude Code and run: /vector-memory"
+echo "  3. (Optional) Set up always-on mode:"
+echo "     Add vector memory instructions to your project's CLAUDE.md"
+echo "     See: ${REPO_DIR}/README.md#always-on-mode-recommended"
+echo ""
+echo "  4. (Optional) Set up session hooks for auto-reindex:"
+echo "     cp ${REPO_DIR}/templates/session-reindex.sh.template /path/to/your/project/scripts/session-reindex.sh"
+echo "     cp ${REPO_DIR}/templates/hooks.json.template /path/to/your/project/.claude/hooks.json"
+echo "     Edit paths in both files, then chmod +x the script"
+echo "     See: ${REPO_DIR}/README.md#automatic-session-hooks-recommended"
+echo ""
+echo "  5. Restart Claude Code and run: /vector-memory"
 echo ""

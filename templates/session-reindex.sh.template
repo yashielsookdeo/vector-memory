@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Session startup script: ensure Qdrant is running and reindex changed files.
+# Called by .claude/hooks.json on SessionStart.
+#
+# Configuration:
+#   VECTOR_MEMORY_WORKSPACE  — path to index (set below)
+#   VECTOR_MEMORY_SCRIPTS    — path to vector-memory/scripts (set below)
+
+set -euo pipefail
+
+# ── EDIT THESE ───────────────────────────────────────────────────────────────
+VECTOR_MEMORY_WORKSPACE="__WORKSPACE_PATH__"
+VECTOR_MEMORY_SCRIPTS="__SCRIPTS_PATH__"
+# ── END EDIT ─────────────────────────────────────────────────────────────────
+
+export VECTOR_MEMORY_WORKSPACE
+
+QDRANT_URL="http://localhost:6333"
+
+# 1. Ensure Qdrant container is running
+if ! docker ps --filter "name=qdrant" --format "{{.Names}}" | grep -q qdrant 2>/dev/null; then
+    docker start qdrant >/dev/null 2>&1 || true
+    sleep 2
+fi
+
+# 2. Wait for Qdrant to be healthy (up to 15s)
+for i in $(seq 1 15); do
+    if curl -sf "$QDRANT_URL/healthz" >/dev/null 2>&1; then
+        break
+    fi
+    sleep 1
+done
+
+if ! curl -sf "$QDRANT_URL/healthz" >/dev/null 2>&1; then
+    echo "Warning: Qdrant not reachable at $QDRANT_URL"
+    exit 0
+fi
+
+# 3. Run incremental reindex
+cd "$VECTOR_MEMORY_SCRIPTS"
+if [ -d ".venv" ]; then
+    source .venv/bin/activate
+    python3 index_codebase.py --incremental 2>&1
+else
+    echo "Warning: Python venv not found at $VECTOR_MEMORY_SCRIPTS/.venv"
+fi

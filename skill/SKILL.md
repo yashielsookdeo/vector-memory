@@ -92,13 +92,52 @@ Key files: <file:line references>
 
 ---
 
+## Always-On Mode (recommended)
+
+Instead of invoking `/vector-memory` each session, add these instructions to your project's `CLAUDE.md`:
+
+```markdown
+## Vector Memory (Qdrant)
+
+This workspace uses Qdrant vector search (`<collection-name>` collection) for codebase knowledge.
+
+### Search Before Answering
+Before answering any question about the codebase, use `qdrant-find` first.
+After getting results, use the Read tool on the returned file paths.
+
+### Store After Solving
+After fixing a bug, making a decision, or discovering how something works, use `qdrant-store`:
+[DATE] <summary> | Root cause: ... | Fix: ... | Key files: ...
+```
+
+This makes vector memory active every session without manual skill invocation.
+
+---
+
+## Automatic Session Hooks (recommended)
+
+Set up a SessionStart hook to automatically start Qdrant and reindex changed files:
+
+1. Copy `templates/session-reindex.sh.template` to your project's scripts directory
+2. Edit the paths at the top of the script
+3. Make it executable: `chmod +x session-reindex.sh`
+4. Copy `templates/hooks.json.template` to your project's `.claude/hooks.json`
+5. Edit the command path to point to your script
+
+This ensures every session starts with Qdrant running and a fresh index.
+
+---
+
 ## Re-indexing (when needed)
 
 After significant code changes:
 ```bash
 cd path/to/vector-memory/scripts
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-VECTOR_MEMORY_WORKSPACE=/path/to/your/project python3 index_codebase.py           # incremental
-VECTOR_MEMORY_WORKSPACE=/path/to/your/project python3 index_codebase.py --clean   # full rebuild
+source .venv/bin/activate
+
+# Incremental (only changed files — fast)
+VECTOR_MEMORY_WORKSPACE=/path/to/your/project python3 index_codebase.py --incremental
+
+# Full rebuild (after large refactors)
+VECTOR_MEMORY_WORKSPACE=/path/to/your/project python3 index_codebase.py --clean
 ```
